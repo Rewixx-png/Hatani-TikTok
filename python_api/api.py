@@ -12,6 +12,7 @@ import re
 import cv2
 import time
 import shutil
+import signal
 from TikTokApi import TikTokApi
 import uvicorn
 
@@ -26,6 +27,14 @@ for folder in [config.VIDEO_CACHE_DIR, config.AUDIO_DIR, config.TEMP_IMAGE_DIR, 
         os.makedirs(folder)
         
 app_state = {}
+
+# --- Функция для перезагрузки сервиса ---
+async def shutdown_scheduler():
+    shutdown_delay = 12 * 60 * 60  # 12 часов
+    config.logger.info(f"Планировщик перезагрузки запущен. Перезагрузка через {shutdown_delay / 3600} часов.")
+    await asyncio.sleep(shutdown_delay)
+    config.logger.info("Время пришло! Инициирую плановую перезагрузку API...")
+    os.kill(os.getpid(), signal.SIGTERM)
 
 # --- Функция для очистки временных папок с картинками ---
 async def cleanup_folder(path: str, delay_seconds: int):
@@ -58,6 +67,7 @@ async def lifespan(app: FastAPI):
     app_state["api"] = api
     app_state["shazam"] = services.Shazam()
     app_state["lock"] = asyncio.Lock()
+    asyncio.create_task(shutdown_scheduler()) # Запускаем фоновую задачу на перезагрузку
     config.logger.info(">>> Python API готов к приему запросов! <<<")
     yield
     config.logger.info("Закрываем сессию TikTok API...")
@@ -70,6 +80,10 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="templates/static"), name="static")
 app.mount("/temp_images", StaticFiles(directory=config.TEMP_IMAGE_DIR), name="temp_images")
 templates = Jinja2Templates(directory="templates")
+
+@app.get("/health")
+async def health_check():
+    return JSONResponse(content={"status": "ok"})
 
 @app.get("/video_data")
 async def get_video_data(original_url: str):

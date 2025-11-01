@@ -6,13 +6,14 @@
 # Эти файлы содержат чувствительную информацию (токены, ключи API)
 # и никогда не должны попадать в репозиторий.
 /python_api/.env
-/nodejs_bot/token.txt
+/nodejs_bot/.env
 
 # 2. Кэш и медиафайлы, генерируемые ботом
 # Папки для скачанных видео, аудио и база данных кэша.
 # Они создаются во время работы бота и могут занимать много места.
 /python_api/video_cache/
 /python_api/audio_files/
+/python_api/temp_images/
 /python_api/cache.db
 /python_api/cache.db-journal
 
@@ -43,7 +44,3 @@ yarn-debug.log
 .vscode/
 .DS_Store
 Thumbs.db
-
-# 7. Установочный скрипт
-# Если вы скачиваете его в корень проекта для запуска.
-installer.sh
