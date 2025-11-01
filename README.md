@@ -22,7 +22,8 @@
 
 ```bash
 git clone https://github.com/Rewixx-png/advanced-tiktok-downloader.git
-cd advanced-tiktok-downloader```
+cd advanced-tiktok-downloader
+```
 
 ### Шаг 2: Настройка переменных окружения
 
