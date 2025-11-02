@@ -13,6 +13,7 @@ import cv2
 import time
 import shutil
 import signal
+import logging
 from TikTokApi import TikTokApi
 import uvicorn
 
@@ -20,6 +21,14 @@ import uvicorn
 import config
 import database
 import services
+
+# --- Фильтр для логов health check ---
+class HealthCheckFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.getMessage().find("/health") == -1
+
+# Применяем фильтр к логгеру uvicorn
+logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
 # --- Создание папок ---
 for folder in [config.VIDEO_CACHE_DIR, config.AUDIO_DIR, config.TEMP_IMAGE_DIR, "templates/static", "templates/partials"]:
@@ -84,6 +93,15 @@ templates = Jinja2Templates(directory="templates")
 @app.get("/health")
 async def health_check():
     return JSONResponse(content={"status": "ok"})
+
+@app.get("/get_video_id")
+async def get_video_id_endpoint(url: str):
+    config.logger.info(f"Получен запрос на извлечение ID для URL: {url}")
+    resolved_url = await services.resolve_short_url(url)
+    video_id = extract_video_id_from_url(resolved_url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Не удалось извлечь ID из ссылки.")
+    return JSONResponse(content={"video_id": video_id})
 
 @app.get("/video_data")
 async def get_video_data(original_url: str):

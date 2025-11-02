@@ -1,157 +1,25 @@
-// nodejs_bot/bot.js
-require('dotenv').config();
-const TelegramBot = require('node-telegram-bot-api');
-const axios = require('axios');
+import TelegramBot from 'node-telegram-bot-api';
+import { TELEGRAM_BOT_TOKEN, TELEGRAM_API_URL } from './config.js';
+import { cacheManager } from './cache_manager.js';
+import { initializeTiktokHandler } from './handlers/tiktok_handler.js';
 
-// --- Загружаем конфигурацию из .env ---
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TIKTOK_API_URL = process.env.TIKTOK_API_URL; // Внутренний адрес API (http://api:18361)
-const PUBLIC_SERVER_URL = process.env.PUBLIC_SERVER_URL; // Внешний адрес для ссылок (http://YOUR_IP:18361)
-const TELEGRAM_API_URL = process.env.TELEGRAM_API_URL; // Опциональный кастомный API Telegram
-
-if (!TELEGRAM_BOT_TOKEN || !TIKTOK_API_URL || !PUBLIC_SERVER_URL) {
-    console.error("Критическая ошибка: не все переменные окружения заданы! (TELEGRAM_BOT_TOKEN, TIKTOK_API_URL, PUBLIC_SERVER_URL)");
-    process.exit(1);
-}
-
-// --- Инициализация API-клиента и бота ---
-const api = axios.create({ baseURL: TIKTOK_API_URL });
+// Инициализация бота
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, {
     polling: true,
-    baseApiUrl: TELEGRAM_API_URL // Используем кастомный URL, если он задан
+    baseApiUrl: TELEGRAM_API_URL,
+    request: { timeout: 60000 }
 });
 
-console.log('Бот запущен и готов к работе...');
+// Асинхронная самовызывающаяся функция для инициализации
+(async () => {
+    // Инициализация файлового кэша
+    await cacheManager.init();
 
-// --- Функции-хелперы из твоего кода ---
-function escapeHTML(text) {
-    if (typeof text !== 'string') return '';
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+    // Инициализация обработчика TikTok ссылок
+    initializeTiktokHandler(bot);
 
-const countryCodes = { 'AU': 'Австралия 🇦🇺', 'AT': 'Австрия 🇦🇹', 'AZ': 'Азербайджан 🇦🇿', 'AL': 'Албания 🇦🇱', 'DZ': 'Алжир 🇩🇿', 'AE': 'ОАЭ 🇦🇪', 'AR': 'Аргентина 🇦🇷', 'AM': 'Армения 🇦🇲', 'BD': 'Бангладеш 🇧🇩', 'BY': 'Беларусь 🇧🇾', 'BE': 'Бельгия 🇧🇪', 'BG': 'Болгария 🇧🇬', 'BR': 'Бразилия 🇧🇷', 'GB': 'Великобритания 🇬🇧', 'HU': 'Венгрия 🇭🇺', 'VE': 'Венесуэла 🇻🇪', 'VN': 'Вьетнам 🇻🇳', 'DE': 'Германия 🇩🇪', 'GR': 'Греция 🇬🇷', 'GE': 'Грузия 🇬🇪', 'DK': 'Дания 🇩🇰', 'EG': 'Египет 🇪🇬', 'IL': 'Израиль 🇮🇱', 'IN': 'Индия 🇮🇳', 'ID': 'Индонезия 🇮🇩', 'IQ': 'Ирак 🇮🇶', 'IR': 'Иран 🇮🇷', 'IE': 'Ирландия 🇮🇪', 'ES': 'Испания 🇪🇸', 'IT': 'Италия 🇮🇹', 'KZ': 'Казахстан 🇰🇿', 'KH': 'Камбоджа 🇰🇭', 'CA': 'Канада 🇨🇦', 'QA': 'Катар 🇶🇦', 'CY': 'Кипр 🇨🇾', 'KG': 'Киргизия 🇰🇬', 'CN': 'Китай 🇨🇳', 'CO': 'Колумбия 🇨🇴', 'KW': 'Кувейт 🇰🇼', 'LV': 'Латвия 🇱🇻', 'LB': 'Ливан 🇱🇧', 'LT': 'Литва 🇱🇹', 'MY': 'Малайзия 🇲🇾', 'MA': 'Марокко 🇲🇦', 'MX': 'Мексика 🇲🇽', 'MD': 'Молдова 🇲🇩', 'MN': 'Монголия 🇲🇳', 'MM': 'Мьянма 🇲🇲', 'NP': 'Непал 🇳🇵', 'NL': 'Нидерланды 🇳🇱', 'NZ': 'Новая Зеландия 🇳🇿', 'NO': 'Норвегия 🇳🇴', 'OM': 'Оман 🇴🇲', 'PK': 'Пакистан 🇵🇰', 'PE': 'Перу 🇵🇪', 'PL': 'Польша 🇵🇱', 'PT': 'Португалия 🇵🇹', 'PR': 'Пуэрто-Рико 🇵🇷', 'KR': 'Южная Корея 🇰🇷', 'RU': 'Россия 🇷🇺', 'RO': 'Румыния 🇷🇴', 'SA': 'Саудовская Аравия 🇸🇦', 'RS': 'Сербия 🇷🇸', 'SG': 'Сингапур 🇸🇬', 'SK': 'Словакия 🇸🇰', 'SI': 'Словения 🇸🇮', 'US': 'США 🇺🇸', 'TH': 'Таиланд 🇹🇭', 'TW': 'Тайвань 🇹🇼', 'TR': 'Турция 🇹🇷', 'UZ': 'Узбекистан 🇺🇿', 'UA': 'Украина 🇺🇦', 'UY': 'Уругвай 🇺🇾', 'PH': 'Филиппины 🇵🇭', 'FI': 'Финляндия 🇫🇮', 'FR': 'Франция 🇫🇷', 'HR': 'Хорватия 🇭🇷', 'CZ': 'Чехия 🇨🇿', 'CL': 'Чили 🇨🇱', 'CH': 'Швейцария 🇨🇭', 'SE': 'Швеция 🇸🇪', 'LK': 'Шри-Ланка 🇱🇰', 'EC': 'Эквадор 🇪🇨', 'EE': 'Эстония 🇪🇪', 'ZA': 'ЮАР 🇿🇦', 'JP': 'Япония 🇯🇵'};
-function getCountryName(code) { if (!code) return 'Не указан'; return countryCodes[code.toUpperCase()] || code.toUpperCase(); }
-function formatNumber(num) { if (typeof num !== 'number') return 0; return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,'); }
+    // Обработка ошибок опроса
+    bot.on('polling_error', (error) => console.error('Ошибка опроса:', error.code, '-', error.message));
 
-const formatTimestamp = (unixTime) => {
-    const date = new Date(unixTime * 1000);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
-};
-
-// --- Основной обработчик сообщений ---
-const tiktokRegex = /https?:\/\/(?:www\.|vm\.|vt\.)?tiktok\.com\/\S+/;
-
-bot.onText(tiktokRegex, async (msg, match) => {
-    const chatId = msg.chat.id;
-    const user = msg.from;
-    const userIdentifier = user.username ? `@${user.username}` : `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}`;
-    const sourceLine = `\n\n🔗 <b>Ссылка от:</b> ${escapeHTML(userIdentifier)}`;
-
-    // --- ПРОВЕРКА ДОСТУПНОСТИ API ПЕРЕД НАЧАЛОМ РАБОТЫ ---
-    try {
-        await api.get('/health');
-    } catch (error) {
-        console.log('API недоступен, возможно перезагружается. Просим пользователя подождать.');
-        bot.sendMessage(chatId, "🔧 API сейчас перезагружается для обновления сессий. Пожалуйста, попробуйте отправить ссылку еще раз через минуту.", { reply_to_message_id: msg.message_id });
-        return;
-    }
-
-    const tiktokUrl = match[0];
-    const waitingMsg = await bot.sendMessage(chatId, '⏳ Получил ссылку, запрашиваю данные...', { reply_to_message_id: msg.message_id });
-
-    try {
-        const response = await api.get('/video_data', { params: { original_url: tiktokUrl }, timeout: 180000 });
-        const { metadata, videoBase64, image_paths } = response.data;
-        
-        if (image_paths && image_paths.length > 0) {
-            // --- Логика для фото-альбомов (оптимизирована) ---
-            await bot.editMessageText(`✅ Данные получены. Отправляю ${image_paths.length} фото...`, { chat_id: chatId, message_id: waitingMsg.message_id });
-            
-            let rawDesc = metadata.desc || '';
-            const header = `<b>Автор:</b> @${escapeHTML(metadata.author?.uniqueId || '')}\n`;
-            const stats = metadata.stats || {};
-            const music = metadata.music || {};
-            const footer = `❤️ ${formatNumber(stats.diggCount)} | 💬 ${formatNumber(stats.commentCount)} | ⭐ ${formatNumber(stats.collectCount)} | 🔁 ${formatNumber(stats.shareCount)}\n\n`
-                         + `🎵 <b>Музыка:</b> ${music.title ? `${escapeHTML(music.title)} - ${escapeHTML(music.authorName)}` : '<i>Оригинальный звук</i>'}`;
-            
-            const MAX_CAPTION_LENGTH = 1024;
-            const availableLength = MAX_CAPTION_LENGTH - (header.length + footer.length + sourceLine.length) - 100;
-            if (rawDesc.length > availableLength) rawDesc = rawDesc.substring(0, availableLength) + '...';
-            const descriptionBlock = rawDesc ? `<b>Описание:</b>\n<blockquote expandable>${escapeHTML(rawDesc)}</blockquote>\n\n` : '';
-            
-            let finalCaption = `${header}${descriptionBlock}${footer}${sourceLine}`.trim();
-
-            const mediaGroup = image_paths.map(relative_url => {
-                return { type: 'photo', media: `${PUBLIC_SERVER_URL}${relative_url}` };
-            });
-            
-            if (mediaGroup.length > 0) {
-                mediaGroup[0].caption = finalCaption;
-                mediaGroup[0].parse_mode = 'HTML';
-            }
-            
-            for (let i = 0; i < mediaGroup.length; i += 10) {
-                await bot.sendMediaGroup(chatId, mediaGroup.slice(i, i + 10), { reply_to_message_id: msg.message_id });
-            }
-            await bot.deleteMessage(chatId, waitingMsg.message_id);
-
-        } else if (videoBase64) {
-            // --- Логика для видео ---
-            await bot.deleteMessage(chatId, waitingMsg.message_id);
-            await bot.sendChatAction(chatId, 'upload_video');
-            const videoBuffer = Buffer.from(videoBase64, 'base64');
-            const sentVideoMsg = await bot.sendVideo(chatId, videoBuffer, { caption: '​', reply_to_message_id: msg.message_id });
-            
-            let desc = metadata.desc || '<i>Без описания</i>';
-            const stats = metadata.stats || {};
-            const authorStats = metadata.authorStats || {};
-            const videoDetails = metadata.videoDetails || {};
-
-            const header = `<b>Автор:</b> @${escapeHTML(metadata.author?.uniqueId || '')}\n` + (authorStats ? `  👥 Подписчиков: ${formatNumber(authorStats.followerCount)}\n  ❤️ Всего лайков: ${formatNumber(authorStats.heartCount)}\n\n` : '\n');
-            const statsBlock = `<b>Статистика видео:</b>\n` + `  ❤️ Лайки: ${formatNumber(stats.diggCount)}\n` + `  💬 Комментарии: ${formatNumber(stats.commentCount)}\n` + `  🔁 Репосты: ${formatNumber(stats.shareCount)}\n` + `  ▶️ Просмотры: ${formatNumber(stats.playCount)}\n\n`;
-            const detailsBlock = `<b>Детали:</b>\n` + `  📍 <b>Регион:</b> ${getCountryName(metadata.locationCreated)}\n` + `  📅 Опубликовано: ${escapeHTML(formatTimestamp(metadata.createTime))}\n` + (metadata.video?.duration ? `  ⏱️ Длительность: ${metadata.video.duration} сек\n` : '') + (videoDetails.resolution ? `  ⚙️ Разрешение: ${videoDetails.resolution}\n` : '') + (videoDetails.fps ? `  🎞️ Кадров/сек: ~${videoDetails.fps}\n` : '') + (videoDetails.size_mb ? `  💾 Размер: ${escapeHTML(videoDetails.size_mb)}` : '');
-            let musicLine = `\n\n🎵 <b>Музыка:</b> <i>Оригинальный звук</i>`;
-            if (metadata.shazam?.title && metadata.shazam?.title !== 'Неизвестно') musicLine = `\n\n🎵 <b>Shazam:</b> ${escapeHTML(metadata.shazam.artist)} - ${escapeHTML(metadata.shazam.title)}`;
-            
-            const availableLength = 1024 - (header.length + statsBlock + detailsBlock + musicLine + sourceLine.length).length - 100;
-            if (desc.length > availableLength) desc = desc.substring(0, availableLength) + '...';
-            const descriptionBlock = `<b>Описание:</b>\n<blockquote expandable>${escapeHTML(desc)}</blockquote>\n\n`;
-            
-            let finalCaption = `${header}${descriptionBlock}${statsBlock}${detailsBlock}`.trim() + musicLine + sourceLine;
-            
-            const options = { chat_id: chatId, message_id: sentVideoMsg.message_id, parse_mode: 'HTML' };
-            if (metadata.music_file_id && metadata.id) {
-                const musicDownloadUrl = `${PUBLIC_SERVER_URL}/download/${metadata.id}/${metadata.music_file_id}`;
-                options.reply_markup = JSON.stringify({
-                    inline_keyboard: [[{ text: '🎵 Скачать трек (Shazam)', url: musicDownloadUrl }]]
-                });
-            }
-            await bot.editMessageCaption(finalCaption.trim(), options);
-
-        } else {
-             throw new Error("API не вернул ни видео, ни фотоальбом.");
-        }
-
-        // Удаляем исходное сообщение пользователя в случае успеха
-        await bot.deleteMessage(chatId, msg.message_id);
-
-    } catch (error) {
-        const errorBody = error.response?.data || error.message || 'Неизвестная ошибка';
-        console.error(`[${chatId}] ГЛОБАЛЬНАЯ ОШИБКА:`, errorBody);
-        const errorText = (typeof errorBody === 'object' && errorBody.detail) ? `❌ Ошибка: ${errorBody.detail}` : '❌ Произошла критическая ошибка. Попробуйте позже.';
-        try { 
-            await bot.editMessageText(errorText, { chat_id: chatId, message_id: waitingMsg.message_id });
-            // Удаляем исходное сообщение пользователя даже в случае ошибки, чтобы не засорять чат
-            await bot.deleteMessage(chatId, msg.message_id);
-        }
-        catch (editError) { console.error(`[${chatId}] Не удалось отредактировать/удалить сообщение об ошибке:`, editError.message); }
-    }
-});
-
-bot.on('polling_error', (error) => console.error('Ошибка опроса:', error.code, '-', error.message));
+    console.log('Бот запущен и готов к работе...');
+})();

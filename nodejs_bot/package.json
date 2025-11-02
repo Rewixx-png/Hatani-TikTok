@@ -1,8 +1,9 @@
 {
   "name": "hatani-tiktok-bot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Telegram bot that uses a Python API to get TikTok data.",
   "main": "bot.js",
+  "type": "module",
   "scripts": {
     "start": "node bot.js"
   },
@@ -11,6 +12,7 @@
   "dependencies": {
     "axios": "^1.7.2",
     "dotenv": "^16.4.5",
+    "lowdb": "^7.0.1",
     "node-telegram-bot-api": "^0.66.0"
   }
 }

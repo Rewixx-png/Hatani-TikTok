@@ -18,9 +18,8 @@ FROM node:20-alpine
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем ИСКЛЮЧИТЕЛЬНО код нашего приложения
-COPY bot.js ./
-COPY .env.example ./
+# Копируем ВЕСЬ код нашего приложения и .env.example
+COPY . .
 
 # Копируем уже готовую папку node_modules из этапа "builder"
 COPY --from=builder /app/node_modules ./node_modules
