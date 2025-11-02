@@ -4,6 +4,7 @@ services:
       context: ./python_api
       dockerfile: Dockerfile
     restart: always
+    container_name: hatani-tiktok-api
     ports:
       - "18361:18361"
     env_file:
@@ -23,6 +24,7 @@ services:
       context: ./nodejs_bot
       dockerfile: Dockerfile
     restart: always
+    container_name: hatani-tiktok-bot
     depends_on:
       api:
         condition: service_healthy

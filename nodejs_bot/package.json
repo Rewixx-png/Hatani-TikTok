@@ -1,5 +1,5 @@
 {
-  "name": "tiktok-bot",
+  "name": "hatani-tiktok-bot",
   "version": "1.0.0",
   "description": "Telegram bot that uses a Python API to get TikTok data.",
   "main": "bot.js",
