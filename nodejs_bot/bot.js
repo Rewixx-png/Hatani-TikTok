@@ -45,106 +45,112 @@ const formatTimestamp = (unixTime) => {
 };
 
 // --- Основной обработчик сообщений ---
-bot.on('message', async (msg) => {
-    if (!msg.text) return;
+const tiktokRegex = /https?:\/\/(?:www\.|vm\.|vt\.)?tiktok\.com\/\S+/;
+
+bot.onText(tiktokRegex, async (msg, match) => {
     const chatId = msg.chat.id;
-    const text = msg.text;
-    const tiktokRegex = /https?:\/\/(?:www\.|vm\.|vt\.)?tiktok\.com\/\S+/;
-    const match = text.match(tiktokRegex);
+    const user = msg.from;
+    const userIdentifier = user.username ? `@${user.username}` : `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}`;
+    const sourceLine = `\n\n🔗 <b>Ссылка от:</b> ${escapeHTML(userIdentifier)}`;
 
-    if (match) {
-        // --- ПРОВЕРКА ДОСТУПНОСТИ API ПЕРЕД НАЧАЛОМ РАБОТЫ ---
-        try {
-            await api.get('/health');
-        } catch (error) {
-            console.log('API недоступен, возможно перезагружается. Просим пользователя подождать.');
-            bot.sendMessage(chatId, "🔧 API сейчас перезагружается для обновления сессий. Пожалуйста, попробуйте отправить ссылку еще раз через минуту.", { reply_to_message_id: msg.message_id });
-            return;
-        }
+    // --- ПРОВЕРКА ДОСТУПНОСТИ API ПЕРЕД НАЧАЛОМ РАБОТЫ ---
+    try {
+        await api.get('/health');
+    } catch (error) {
+        console.log('API недоступен, возможно перезагружается. Просим пользователя подождать.');
+        bot.sendMessage(chatId, "🔧 API сейчас перезагружается для обновления сессий. Пожалуйста, попробуйте отправить ссылку еще раз через минуту.", { reply_to_message_id: msg.message_id });
+        return;
+    }
 
-        const tiktokUrl = match[0];
-        const waitingMsg = await bot.sendMessage(chatId, '⏳ Получил ссылку, запрашиваю данные...', { reply_to_message_id: msg.message_id });
+    const tiktokUrl = match[0];
+    const waitingMsg = await bot.sendMessage(chatId, '⏳ Получил ссылку, запрашиваю данные...', { reply_to_message_id: msg.message_id });
 
-        try {
-            const response = await api.get('/video_data', { params: { original_url: tiktokUrl }, timeout: 180000 });
-            const { metadata, videoBase64, image_paths } = response.data;
+    try {
+        const response = await api.get('/video_data', { params: { original_url: tiktokUrl }, timeout: 180000 });
+        const { metadata, videoBase64, image_paths } = response.data;
+        
+        if (image_paths && image_paths.length > 0) {
+            // --- Логика для фото-альбомов (оптимизирована) ---
+            await bot.editMessageText(`✅ Данные получены. Отправляю ${image_paths.length} фото...`, { chat_id: chatId, message_id: waitingMsg.message_id });
             
-            if (image_paths && image_paths.length > 0) {
-                // --- Логика для фото-альбомов (оптимизирована) ---
-                await bot.editMessageText(`✅ Данные получены. Отправляю ${image_paths.length} фото...`, { chat_id: chatId, message_id: waitingMsg.message_id });
-                
-                let rawDesc = metadata.desc || '';
-                const header = `<b>Автор:</b> @${escapeHTML(metadata.author?.uniqueId || '')}\n`;
-                const stats = metadata.stats || {};
-                const music = metadata.music || {};
-                const footer = `❤️ ${formatNumber(stats.diggCount)} | 💬 ${formatNumber(stats.commentCount)} | ⭐ ${formatNumber(stats.collectCount)} | 🔁 ${formatNumber(stats.shareCount)}\n\n`
-                             + `🎵 <b>Музыка:</b> ${music.title ? `${escapeHTML(music.title)} - ${escapeHTML(music.authorName)}` : '<i>Оригинальный звук</i>'}`;
-                
-                const MAX_CAPTION_LENGTH = 1024;
-                const availableLength = MAX_CAPTION_LENGTH - (header.length + footer.length) - 100;
-                if (rawDesc.length > availableLength) rawDesc = rawDesc.substring(0, availableLength) + '...';
-                const descriptionBlock = rawDesc ? `<b>Описание:</b>\n<blockquote expandable>${escapeHTML(rawDesc)}</blockquote>\n\n` : '';
-                
-                let finalCaption = `${header}${descriptionBlock}${footer}`.trim();
+            let rawDesc = metadata.desc || '';
+            const header = `<b>Автор:</b> @${escapeHTML(metadata.author?.uniqueId || '')}\n`;
+            const stats = metadata.stats || {};
+            const music = metadata.music || {};
+            const footer = `❤️ ${formatNumber(stats.diggCount)} | 💬 ${formatNumber(stats.commentCount)} | ⭐ ${formatNumber(stats.collectCount)} | 🔁 ${formatNumber(stats.shareCount)}\n\n`
+                         + `🎵 <b>Музыка:</b> ${music.title ? `${escapeHTML(music.title)} - ${escapeHTML(music.authorName)}` : '<i>Оригинальный звук</i>'}`;
+            
+            const MAX_CAPTION_LENGTH = 1024;
+            const availableLength = MAX_CAPTION_LENGTH - (header.length + footer.length + sourceLine.length) - 100;
+            if (rawDesc.length > availableLength) rawDesc = rawDesc.substring(0, availableLength) + '...';
+            const descriptionBlock = rawDesc ? `<b>Описание:</b>\n<blockquote expandable>${escapeHTML(rawDesc)}</blockquote>\n\n` : '';
+            
+            let finalCaption = `${header}${descriptionBlock}${footer}${sourceLine}`.trim();
 
-                // ОПТИМИЗАЦИЯ: Отправляем ссылки напрямую, без скачивания в боте
-                const mediaGroup = image_paths.map(relative_url => {
-                    return { type: 'photo', media: `${PUBLIC_SERVER_URL}${relative_url}` };
-                });
-                
-                if (mediaGroup.length > 0) {
-                    mediaGroup[0].caption = finalCaption;
-                    mediaGroup[0].parse_mode = 'HTML';
-                }
-                
-                for (let i = 0; i < mediaGroup.length; i += 10) {
-                    await bot.sendMediaGroup(chatId, mediaGroup.slice(i, i + 10), { reply_to_message_id: msg.message_id });
-                }
-                await bot.deleteMessage(chatId, waitingMsg.message_id);
-
-            } else if (videoBase64) {
-                // --- Логика для видео ---
-                await bot.deleteMessage(chatId, waitingMsg.message_id);
-                await bot.sendChatAction(chatId, 'upload_video');
-                const videoBuffer = Buffer.from(videoBase64, 'base64');
-                const sentVideoMsg = await bot.sendVideo(chatId, videoBuffer, { caption: '​', reply_to_message_id: msg.message_id });
-                
-                let desc = metadata.desc || '<i>Без описания</i>';
-                const stats = metadata.stats || {};
-                const authorStats = metadata.authorStats || {};
-                const videoDetails = metadata.videoDetails || {};
-
-                const header = `<b>Автор:</b> @${escapeHTML(metadata.author?.uniqueId || '')}\n` + (authorStats ? `  👥 Подписчиков: ${formatNumber(authorStats.followerCount)}\n  ❤️ Всего лайков: ${formatNumber(authorStats.heartCount)}\n\n` : '\n');
-                const statsBlock = `<b>Статистика видео:</b>\n` + `  ❤️ Лайки: ${formatNumber(stats.diggCount)}\n` + `  💬 Комментарии: ${formatNumber(stats.commentCount)}\n` + `  🔁 Репосты: ${formatNumber(stats.shareCount)}\n` + `  ▶️ Просмотры: ${formatNumber(stats.playCount)}\n\n`;
-                const detailsBlock = `<b>Детали:</b>\n` + `  📍 <b>Регион:</b> ${getCountryName(metadata.locationCreated)}\n` + `  📅 Опубликовано: ${escapeHTML(formatTimestamp(metadata.createTime))}\n` + (metadata.video?.duration ? `  ⏱️ Длительность: ${metadata.video.duration} сек\n` : '') + (videoDetails.resolution ? `  ⚙️ Разрешение: ${videoDetails.resolution}\n` : '') + (videoDetails.fps ? `  🎞️ Кадров/сек: ~${videoDetails.fps}\n` : '') + (videoDetails.size_mb ? `  💾 Размер: ${escapeHTML(videoDetails.size_mb)}` : '');
-                let musicLine = `\n\n🎵 <b>Музыка:</b> <i>Оригинальный звук</i>`;
-                if (metadata.shazam?.title && metadata.shazam?.title !== 'Неизвестно') musicLine = `\n\n🎵 <b>Shazam:</b> ${escapeHTML(metadata.shazam.artist)} - ${escapeHTML(metadata.shazam.title)}`;
-                
-                const availableLength = 1024 - (header.length + statsBlock + detailsBlock + musicLine).length - 100;
-                if (desc.length > availableLength) desc = desc.substring(0, availableLength) + '...';
-                const descriptionBlock = `<b>Описание:</b>\n<blockquote expandable>${escapeHTML(desc)}</blockquote>\n\n`;
-                
-                let finalCaption = `${header}${descriptionBlock}${statsBlock}${detailsBlock}`.trim() + musicLine;
-                
-                const options = { chat_id: chatId, message_id: sentVideoMsg.message_id, parse_mode: 'HTML' };
-                if (metadata.music_file_id && metadata.id) {
-                    const musicDownloadUrl = `${PUBLIC_SERVER_URL}/download/${metadata.id}/${metadata.music_file_id}`;
-                    options.reply_markup = JSON.stringify({
-                        inline_keyboard: [[{ text: '🎵 Скачать трек (Shazam)', url: musicDownloadUrl }]]
-                    });
-                }
-                await bot.editMessageCaption(finalCaption.trim(), options);
-
-            } else {
-                 throw new Error("API не вернул ни видео, ни фотоальбом.");
+            const mediaGroup = image_paths.map(relative_url => {
+                return { type: 'photo', media: `${PUBLIC_SERVER_URL}${relative_url}` };
+            });
+            
+            if (mediaGroup.length > 0) {
+                mediaGroup[0].caption = finalCaption;
+                mediaGroup[0].parse_mode = 'HTML';
             }
-        } catch (error) {
-            const errorBody = error.response?.data || error.message || 'Неизвестная ошибка';
-            console.error(`[${chatId}] ГЛОБАЛЬНАЯ ОШИБКА:`, errorBody);
-            const errorText = (typeof errorBody === 'object' && errorBody.detail) ? `❌ Ошибка: ${errorBody.detail}` : '❌ Произошла критическая ошибка. Попробуйте позже.';
-            try { await bot.editMessageText(errorText, { chat_id: chatId, message_id: waitingMsg.message_id }); }
-            catch (editError) { console.error(`[${chatId}] Не удалось отредактировать сообщение об ошибке:`, editError.message); }
+            
+            for (let i = 0; i < mediaGroup.length; i += 10) {
+                await bot.sendMediaGroup(chatId, mediaGroup.slice(i, i + 10), { reply_to_message_id: msg.message_id });
+            }
+            await bot.deleteMessage(chatId, waitingMsg.message_id);
+
+        } else if (videoBase64) {
+            // --- Логика для видео ---
+            await bot.deleteMessage(chatId, waitingMsg.message_id);
+            await bot.sendChatAction(chatId, 'upload_video');
+            const videoBuffer = Buffer.from(videoBase64, 'base64');
+            const sentVideoMsg = await bot.sendVideo(chatId, videoBuffer, { caption: '​', reply_to_message_id: msg.message_id });
+            
+            let desc = metadata.desc || '<i>Без описания</i>';
+            const stats = metadata.stats || {};
+            const authorStats = metadata.authorStats || {};
+            const videoDetails = metadata.videoDetails || {};
+
+            const header = `<b>Автор:</b> @${escapeHTML(metadata.author?.uniqueId || '')}\n` + (authorStats ? `  👥 Подписчиков: ${formatNumber(authorStats.followerCount)}\n  ❤️ Всего лайков: ${formatNumber(authorStats.heartCount)}\n\n` : '\n');
+            const statsBlock = `<b>Статистика видео:</b>\n` + `  ❤️ Лайки: ${formatNumber(stats.diggCount)}\n` + `  💬 Комментарии: ${formatNumber(stats.commentCount)}\n` + `  🔁 Репосты: ${formatNumber(stats.shareCount)}\n` + `  ▶️ Просмотры: ${formatNumber(stats.playCount)}\n\n`;
+            const detailsBlock = `<b>Детали:</b>\n` + `  📍 <b>Регион:</b> ${getCountryName(metadata.locationCreated)}\n` + `  📅 Опубликовано: ${escapeHTML(formatTimestamp(metadata.createTime))}\n` + (metadata.video?.duration ? `  ⏱️ Длительность: ${metadata.video.duration} сек\n` : '') + (videoDetails.resolution ? `  ⚙️ Разрешение: ${videoDetails.resolution}\n` : '') + (videoDetails.fps ? `  🎞️ Кадров/сек: ~${videoDetails.fps}\n` : '') + (videoDetails.size_mb ? `  💾 Размер: ${escapeHTML(videoDetails.size_mb)}` : '');
+            let musicLine = `\n\n🎵 <b>Музыка:</b> <i>Оригинальный звук</i>`;
+            if (metadata.shazam?.title && metadata.shazam?.title !== 'Неизвестно') musicLine = `\n\n🎵 <b>Shazam:</b> ${escapeHTML(metadata.shazam.artist)} - ${escapeHTML(metadata.shazam.title)}`;
+            
+            const availableLength = 1024 - (header.length + statsBlock + detailsBlock + musicLine + sourceLine.length).length - 100;
+            if (desc.length > availableLength) desc = desc.substring(0, availableLength) + '...';
+            const descriptionBlock = `<b>Описание:</b>\n<blockquote expandable>${escapeHTML(desc)}</blockquote>\n\n`;
+            
+            let finalCaption = `${header}${descriptionBlock}${statsBlock}${detailsBlock}`.trim() + musicLine + sourceLine;
+            
+            const options = { chat_id: chatId, message_id: sentVideoMsg.message_id, parse_mode: 'HTML' };
+            if (metadata.music_file_id && metadata.id) {
+                const musicDownloadUrl = `${PUBLIC_SERVER_URL}/download/${metadata.id}/${metadata.music_file_id}`;
+                options.reply_markup = JSON.stringify({
+                    inline_keyboard: [[{ text: '🎵 Скачать трек (Shazam)', url: musicDownloadUrl }]]
+                });
+            }
+            await bot.editMessageCaption(finalCaption.trim(), options);
+
+        } else {
+             throw new Error("API не вернул ни видео, ни фотоальбом.");
         }
+
+        // Удаляем исходное сообщение пользователя в случае успеха
+        await bot.deleteMessage(chatId, msg.message_id);
+
+    } catch (error) {
+        const errorBody = error.response?.data || error.message || 'Неизвестная ошибка';
+        console.error(`[${chatId}] ГЛОБАЛЬНАЯ ОШИБКА:`, errorBody);
+        const errorText = (typeof errorBody === 'object' && errorBody.detail) ? `❌ Ошибка: ${errorBody.detail}` : '❌ Произошла критическая ошибка. Попробуйте позже.';
+        try { 
+            await bot.editMessageText(errorText, { chat_id: chatId, message_id: waitingMsg.message_id });
+            // Удаляем исходное сообщение пользователя даже в случае ошибки, чтобы не засорять чат
+            await bot.deleteMessage(chatId, msg.message_id);
+        }
+        catch (editError) { console.error(`[${chatId}] Не удалось отредактировать/удалить сообщение об ошибке:`, editError.message); }
     }
 });
 
