@@ -1,37 +1,26 @@
 services:
   api:
     build:
-      context: ./python_api
+      context: ./douyin-api
       dockerfile: Dockerfile
     restart: always
-    container_name: hatani-tiktok-api
+    container_name: hatani-tiktok-new-api
     ports:
-      - "18361:18361"
-    env_file:
-      - ./python_api/.env
+      - "8000:80" # Мы будем обращаться к API через порт 8000
     volumes:
-      - api_video_cache:/app/video_cache
-      - api_audio_cache:/app/audio_files
-      - api_temp_images:/app/temp_images
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:18361/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - ./douyin-api/config.yaml:/app/config.yaml
+      - ./douyin-api/crawlers/douyin/web/config.yaml:/app/crawlers/douyin/web/config.yaml
+      - ./douyin-api/crawlers/tiktok/web/config.yaml:/app/crawlers/tiktok/web/config.yaml
+    environment:
+      - TZ=Europe/Moscow
 
   bot:
     build:
-      context: ./nodejs_bot
+      context: ./bot
       dockerfile: Dockerfile
     restart: always
     container_name: hatani-tiktok-bot
     depends_on:
-      api:
-        condition: service_healthy
+      - api
     env_file:
-      - ./nodejs_bot/.env
-
-volumes:
-  api_video_cache:
-  api_audio_cache:
-  api_temp_images:
+      - ./bot/.env

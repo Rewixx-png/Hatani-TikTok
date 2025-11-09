@@ -1,0 +1,34 @@
+# Web - нам не нужен веб-интерфейс, только API
+Web:
+  PyWebIO_Enable: false
+  Domain: http://localhost:8000
+  PyWebIO_Theme: minty
+  Max_Take_URLs: 30
+  Tab_Title: Douyin_TikTok_Download_API
+  Description: API for HataniBot
+  Favicon: https://raw.githubusercontent.com/Evil0ctal/Douyin_TikTok_Download_API/main/logo/logo192.png
+  Easter_Egg: false
+  Live2D_Enable: false
+  Live2D_JS: ''
+
+# API
+API:
+  Host_IP: 0.0.0.0
+  Host_Port: 80 # Внутри контейнера API будет работать на 80 порту
+  Docs_URL: /docs
+  Redoc_URL: /redoc
+  Version: V4.1.2
+  Update_Time: 2025/03/16
+  Environment: Production
+  Download_Switch: false # Скачивание через API нам не нужно, бот сам справится
+  Download_Path: "./download"
+  Download_File_Prefix: "douyin.wtf_"
+
+# iOS Shortcut - нам не нужно
+iOS_Shortcut:
+  iOS_Shortcut_Version: 7.0
+  iOS_Shortcut_Update_Time: 2024/07/05
+  iOS_Shortcut_Link: ''
+  iOS_Shortcut_Link_EN: ''
+  iOS_Shortcut_Update_Note: ''
+  iOS_Shortcut_Update_Note_EN: ''
