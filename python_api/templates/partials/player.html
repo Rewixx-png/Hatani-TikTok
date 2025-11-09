@@ -8,6 +8,14 @@
         <p class="track-artist" title="{{ track_artist }}">{{ track_artist }}</p>
     </div>
 
+    <div class="video-stats">
+        {% if video_details %}
+            <span class="stat-item">{{ video_details.resolution }}</span>
+            <span class="stat-item">{{ video_details.fps }} FPS</span>
+            <span class="stat-item">{{ video_details.size_mb }}</span>
+        {% endif %}
+    </div>
+
     <div class="player-container">
         <audio id="player" controls>
             <source src="/audio/{{ music_file_id }}" type="audio/mp3" />

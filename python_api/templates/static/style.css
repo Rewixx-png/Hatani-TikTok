@@ -69,17 +69,33 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
     opacity: 0;
     transform: translateY(20px);
     animation: slideUpFadeIn 0.8s cubic-bezier(0.25, 1, 0.5, 1) 0.2s forwards;
 }
 
-.track-cover { width: 65%; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 10px; aspect-ratio: 1 / 1; object-fit: cover; }
+.track-cover { width: 65%; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 5px; aspect-ratio: 1 / 1; object-fit: cover; }
 .track-info { width: 100%; }
 .track-title { font-size: 1.8em; font-weight: 700; margin: 0 0 5px 0; }
 .track-artist { font-size: 1.1em; color: var(--text-secondary); margin: 0; }
 .track-title, .track-artist { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.video-stats {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    width: 100%;
+    padding: 8px 0;
+    margin: 5px 0;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+.stat-item {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
 
 .player-container { width: 100%; }
 .plyr--audio .plyr__controls { background: transparent; border: none; padding: 0; color: var(--text-primary); }
@@ -94,7 +110,7 @@ body {
 .download-btn { background-color: var(--plyr-color-main); border-color: transparent; }
 .download-btn:hover { background-color: #00a8ff; }
 
-.original-video-info { font-size: 0.9em; color: var(--text-secondary); margin-top: 10px; }
+.original-video-info { font-size: 0.9em; color: var(--text-secondary); margin-top: 5px; }
 .original-video-info a { color: var(--text-primary); text-decoration: none; font-weight: 500; }
 .original-video-info a:hover { text-decoration: underline; }
 

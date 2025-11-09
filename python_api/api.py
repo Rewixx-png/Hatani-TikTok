@@ -15,6 +15,7 @@ import shutil
 import signal
 import logging
 from TikTokApi import TikTokApi
+from TikTokApi.exceptions import NotFoundException
 import uvicorn
 
 # Импортируем наши модули
@@ -124,7 +125,8 @@ async def get_video_data(original_url: str):
                 post_data = api_response.get("itemInfo", {}).get("itemStruct")
                 if not post_data: raise ValueError("Ключ 'itemStruct' не найден в ответе API TikTok.")
             except Exception as e:
-                raise HTTPException(status_code=500, detail="Не удалось получить данные от TikTok.")
+                config.logger.error(f"Ошибка при получении данных от TikTok для фотоальбома {video_id}: {e}", exc_info=True)
+                raise HTTPException(status_code=503, detail="TikTok временно не отдает данные. Попробуйте позже.")
 
             image_urls = [img['imageURL']['urlList'][0] for img in post_data.get('imagePost', {}).get('images', [])]
             if not image_urls: raise HTTPException(status_code=404, detail="Не найдены URL изображений.")
@@ -146,8 +148,11 @@ async def get_video_data(original_url: str):
             try:
                 post_obj = api.video(url=resolved_url)
                 post_data = await post_obj.info()
+            except NotFoundException:
+                raise HTTPException(status_code=404, detail="Видео не найдено. Возможно, оно приватное или удалено.")
             except Exception as e:
-                raise HTTPException(status_code=500, detail="Не удалось получить информацию о видео.")
+                config.logger.error(f"Критическая ошибка при запросе к TikTokApi для видео {video_id}: {e}", exc_info=True)
+                raise HTTPException(status_code=503, detail="TikTok временно не отвечает. Попробуйте через минуту.")
 
             download_url = post_data.get("video", {}).get("playAddr")
             if not download_url:
@@ -224,6 +229,7 @@ async def download_page_with_video(request: Request, video_id: str, music_file_i
         "author_avatar_url": metadata.get("author", {}).get("avatarThumb", ""),
         "track_title": metadata.get("shazam", {}).get("title", "Трек из видео"),
         "track_artist": metadata.get("shazam", {}).get("artist", "Исполнитель"),
+        "video_details": metadata.get("videoDetails", {}),
         "cover_url": f"/video_thumb/{video_id}",
         "css_version": css_version, "js_version": js_version
     }
